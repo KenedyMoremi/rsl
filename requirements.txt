@@ -4,3 +4,4 @@ torch
 numpy
 gunicorn
 scikit-learn
+regex
