@@ -73,8 +73,8 @@ def predict():
             nn_prediction = 1 if nn_prediction > 0.5 else 0  # Convert probability to class
 
         return jsonify({
-            "random_forest_prediction": rf_prediction,
-            "neural_network_prediction": nn_prediction
+            "random_forest_prediction": int(rf_prediction),
+            "neural_network_prediction": int(nn_prediction)
         })
 
     except Exception as e:
