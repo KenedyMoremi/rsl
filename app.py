@@ -3,10 +3,11 @@ import joblib
 import torch
 import torch.nn as nn
 import numpy as np
+import re
 
 app = Flask(__name__)
 
-# Load the Random Forest model
+# Load Random Forest model
 rf_model = joblib.load("random_forest_model.pkl")
 
 # Define Neural Network Model
@@ -25,28 +26,60 @@ class DataValidationNN(nn.Module):
     def forward(self, x):
         return self.fc(x)
 
-# Load the Neural Network model
-input_size = 5  # Adjust based on features
+# Load Neural Network model
+input_size = 4  # Adjust based on features
 nn_model = DataValidationNN(input_size)
 nn_model.load_state_dict(torch.load("neural_network_model.pth"))
 nn_model.eval()
 
+# Function to check if Name is valid (No numbers or special characters)
+def is_valid_name(name):
+    return bool(re.match(r"^[A-Za-z ]+$", name))  # Only letters and spaces
+
+# Function to check if InvoiceNumber is valid (Must be alphanumeric)
+def is_valid_invoice(invoice):
+    return bool(re.match(r"^[A-Za-z0-9]+$", invoice))  # Alphanumeric only
+
+# Function to convert the input JSON to model-compatible format
+def preprocess_input(data):
+    name_valid = 1 if is_valid_name(data["Name"]) else 0
+    date_valid = 1 if data["Date"] else 0  # Assuming any non-empty date is valid
+    invoice_valid = 1 if is_valid_invoice(data["InvoiceNumber"]) else 0
+    supplier_valid = 1 if data["Supplier"] else 0  # Assuming any non-empty supplier is valid
+    
+    return np.array([name_valid, date_valid, invoice_valid, supplier_valid, 1]).reshape(1, -1)
+
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.json
-    features = np.array(data["features"]).reshape(1, -1)
+    try:
+        # Get JSON data
+        data = request.json
 
-    # Random Forest Prediction
-    rf_prediction = rf_model.predict(features)[0]
+        # Validate required fields
+        required_fields = ["Name", "Date", "InvoiceNumber", "Supplier"]
+        if not all(field in data for field in required_fields):
+            return jsonify({"error": "Missing required fields"}), 400
 
-    # Neural Network Prediction
-    with torch.no_grad():
-        tensor_features = torch.tensor(features, dtype=torch.float32)
-        nn_prediction = nn_model(tensor_features).item()
-        nn_prediction = 1 if nn_prediction > 0.5 else 0  # Convert probability to class
+        # Preprocess input
+        features = preprocess_input(data)
 
-    return jsonify({"random_forest_prediction": rf_prediction, "neural_network_prediction": nn_prediction})
+        # Random Forest Prediction
+        rf_prediction = rf_model.predict(features)[0]
 
+        # Neural Network Prediction
+        with torch.no_grad():
+            tensor_features = torch.tensor(features, dtype=torch.float32)
+            nn_prediction = nn_model(tensor_features).item()
+            nn_prediction = 1 if nn_prediction > 0.5 else 0  # Convert probability to class
+
+        return jsonify({
+            "random_forest_prediction": rf_prediction,
+            "neural_network_prediction": nn_prediction
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Ensure the app runs only when using Flask directly
 if __name__ == "__main__":
-    app.run(debug=True)
-    
+    app.run(host="0.0.0.0", port=5000)  # Ignored when using Gunicorn
