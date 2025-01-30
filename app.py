@@ -27,7 +27,7 @@ class DataValidationNN(nn.Module):
         return self.fc(x)
 
 # Load Neural Network model
-input_size = 4  # Adjust based on features
+input_size = 5  # Adjust based on features
 nn_model = DataValidationNN(input_size)
 nn_model.load_state_dict(torch.load("neural_network_model.pth"))
 nn_model.eval()
